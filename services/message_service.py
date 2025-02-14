@@ -11,13 +11,14 @@ class MessageService:
             return "이번 주 등록된 일정이 없습니다."
 
         daily_schedules: Dict[str, List[Schedule]] = {}
-        week_start = start_date
+        week_start = start_date.astimezone(Config.TIMEZONE)
         week_end = week_start + timedelta(days=6)
+        week_end = week_end.replace(hour=23, minute=59, second=59, microsecond=999999)
         
         for schedule in sorted(schedules, key=lambda x: x.datetime):
-            schedule_date = schedule.datetime.replace(tzinfo=None)
+            schedule_date = schedule.datetime.astimezone(Config.TIMEZONE)
             if week_start <= schedule_date <= week_end:
-                date_str = schedule.datetime.strftime('%Y-%m-%d (%a)')
+                date_str = schedule_date.strftime('%Y-%m-%d (%a)')
                 for eng, kor in Config.WEEKDAY_MAP.items():
                     date_str = date_str.replace(f'({eng})', f'({kor})')
                 
@@ -33,9 +34,11 @@ class MessageService:
         for date, day_schedules in daily_schedules.items():
             message += f"📌 {date}\n"
             for schedule in day_schedules:
-                time_str = schedule.datetime.strftime('%H:%M')
+                schedule_time = schedule.datetime.astimezone(Config.TIMEZONE)
+                time_str = schedule_time.strftime('%H:%M')
                 if schedule.end_time:
-                    time_str = f"{time_str} ~ {schedule.end_time.strftime('%H:%M')}"
+                    end_time = schedule.end_time.astimezone(Config.TIMEZONE)
+                    time_str = f"{time_str} ~ {end_time.strftime('%H:%M')}"
                 message += f"    ⌚️ {time_str} {schedule.title}\n"
             message += "\n"
 

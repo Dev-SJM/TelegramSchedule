@@ -35,18 +35,42 @@ class CommandHandlers:
                 await update.message.reply_text(
                     "올바른 형식으로 입력해주세요.\n"
                     "예시 1: /add 2024-02-14 15:00 팀 미팅\n"
-                    "예시 2: /add 2024-02-14 15:00~15:30 팀 미팅"
+                    "예시 2: /add 2024-02-14 15:00~15:30 팀 미팅\n"
+                    "예시 3: /add 2024-02-14 15:00 ~ 15:30 팀 미팅"
                 )
                 return
 
             date_str = args[0]
             time_str = args[1]
-            title = ' '.join(args[2:])  # 제목에서 시간 정보 제외
+            
+            # 시간 범위에 '~'가 포함된 경우 처리
+            if '~' in ' '.join(args[1:4]):  # 시간 부분을 더 넓게 검사
+                # "12:00 ~ 14:30 제목" 형식 처리
+                time_parts = []
+                title_parts = []
+                found_tilde = False
+                
+                for arg in args[1:]:
+                    if '~' in arg or found_tilde:
+                        time_parts.append(arg)
+                        found_tilde = True
+                        if len(time_parts) == 3:  # "시작시간 ~ 종료시간" 완성
+                            title_parts = args[1+len(time_parts):]
+                            break
+                    else:
+                        time_parts.append(arg)
+                
+                time_str = ' '.join(time_parts)
+                title = ' '.join(title_parts)
+            else:
+                # 기존 단일 시간 형식 처리
+                time_str = args[1]
+                title = ' '.join(args[2:])
 
             # 시간 범위 파싱
             start_dt, end_dt = DateService.parse_datetime_range(date_str, time_str)
             
-            # Schedule 객체 생성 (시작 시간과 종료 시간 분리)
+            # Schedule 객체 생성
             schedule = Schedule(
                 title=title,
                 datetime=start_dt,
@@ -58,25 +82,29 @@ class CommandHandlers:
             now = datetime.now(Config.TIMEZONE)
             start_date = DateService.get_week_range(now)[0]
             current_week_schedules = self.schedule_service.get_week_schedules(chat_id, now)
-            
             message = "✅ 일정이 추가되었습니다!\n\n"
             message += self.message_service.format_weekly_schedule(current_week_schedules, start_date)
             
             sent_message = await update.message.reply_text(message)
-            await context.bot.pin_chat_message(
-                chat_id=update.effective_chat.id,
-                message_id=sent_message.message_id,
-                disable_notification=True
-            )
+            
+            try:
+                await context.bot.pin_chat_message(
+                    chat_id=update.effective_chat.id,
+                    message_id=sent_message.message_id,
+                    disable_notification=True
+                )
+            except Exception as pin_error:
+                logging.warning(f"메시지 고정 실패: {pin_error}")
 
         except ValueError as e:
             await update.message.reply_text(
                 f"에러: {str(e)}\n"
                 "날짜: YYYY-MM-DD\n"
-                "시간: HH:MM 또는 HH:MM~HH:MM"
+                "시간: HH:MM 또는 HH:MM ~ HH:MM"
             )
         except Exception as e:
             logging.error(f"일정 추가 중 오류 발생: {e}")
+            print(f"상세 에러: {str(e)}")  # 디버깅용
             await update.message.reply_text("일정 추가 중 오류가 발생했습니다.")
 
     async def show_weekly_schedule(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

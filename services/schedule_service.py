@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import List
+from config import Config
 from models.schedule import Schedule
 from services.date_service import DateService
 from services.storage_service import StorageService
@@ -30,13 +31,10 @@ class ScheduleService:
         start_date, end_date = DateService.get_week_range(base_date)
         schedules = self.get_schedules(chat_id)
         
-        # timezone 설정이 있는 datetime을 naive datetime으로 변환
-        start_date = start_date.replace(tzinfo=None)
-        end_date = end_date.replace(tzinfo=None)
-        
         filtered_schedules = []
         for schedule in schedules:
-            schedule_dt = schedule.datetime.replace(tzinfo=None)
+            # 일정의 datetime을 현지 시간대로 변환
+            schedule_dt = schedule.datetime.astimezone(Config.TIMEZONE)
             if start_date <= schedule_dt <= end_date:
                 filtered_schedules.append(schedule)
                 
