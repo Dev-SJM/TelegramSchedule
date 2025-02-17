@@ -1,16 +1,23 @@
+# services/storage_service.py
 import json
 import os
 from datetime import datetime
 from typing import Dict, List
 from models.schedule import Schedule
+from config import Config
 
 class StorageService:
-    def __init__(self, file_path: str = "schedules.json"):
+    def __init__(self, file_path: str = "data/schedules.json"):
+        # data 디렉토리에 저장하도록 경로 수정
         self.file_path = file_path
         self.ensure_storage_file()
 
     def ensure_storage_file(self) -> None:
-        """스토리지 파일이 없으면 생성"""
+        """스토리지 파일과 디렉토리가 없으면 생성"""
+        # 디렉토리 생성
+        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+        
+        # 파일이 없으면 생성
         if not os.path.exists(self.file_path):
             self.save_schedules({})
 
@@ -55,6 +62,9 @@ class StorageService:
 
     def save_schedules(self, schedules: Dict[str, List[Schedule]]) -> None:
         """모든 일정 저장"""
+        # 디렉토리가 존재하는지 다시 한번 확인
+        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+        
         data = {
             chat_id: [self.serialize_schedule(s) for s in chat_schedules]
             for chat_id, chat_schedules in schedules.items()
