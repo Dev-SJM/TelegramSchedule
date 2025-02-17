@@ -27,6 +27,9 @@ def main():
     application.add_handler(CommandHandler('week', command_handlers.show_weekly_schedule))
     application.add_handler(CommandHandler('next', command_handlers.show_next_week_schedule))
     application.add_handler(CommandHandler('clear', command_handlers.clear_schedules))
+    application.add_handler(CommandHandler('list', command_handlers.list_schedules))
+    application.add_handler(CommandHandler('delete', command_handlers.delete_schedule))
+    application.add_handler(CommandHandler('edit', command_handlers.edit_schedule))
 
     # 봇 실행
     application.run_polling()

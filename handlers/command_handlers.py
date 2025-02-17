@@ -34,9 +34,9 @@ class CommandHandlers:
             if len(args) < 3:
                 await update.message.reply_text(
                     "올바른 형식으로 입력해주세요.\n"
-                    "예시 1: /add 2024-02-14 15:00 팀 미팅\n"
-                    "예시 2: /add 2024-02-14 15:00~15:30 팀 미팅\n"
-                    "예시 3: /add 2024-02-14 15:00 ~ 15:30 팀 미팅"
+                    "예시 1: /add 2025-02-14 15:00 팀 미팅\n"
+                    "예시 2: /add 2025-02-14 15:00~15:30 팀 미팅\n"
+                    "예시 3: /add 2025-02-14 15:00 ~ 15:30 팀 미팅"
                 )
                 return
 
@@ -131,3 +131,124 @@ class CommandHandlers:
         chat_id = str(update.effective_chat.id)
         self.schedule_service.clear_schedules(chat_id)
         await update.message.reply_text("모든 일정이 초기화되었습니다.")
+
+    async def list_schedules(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """전체 일정 목록 보기"""
+        chat_id = str(update.effective_chat.id)
+        message = self.schedule_service.list_schedules(chat_id)
+        await update.message.reply_text(message)
+
+    async def delete_schedule(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """일정 삭제"""
+        chat_id = str(update.effective_chat.id)
+        
+        try:
+            if not context.args:
+                await update.message.reply_text(
+                    "삭제할 일정 번호를 입력해주세요.\n"
+                    "예시: /delete 1\n"
+                    "일정 목록 보기: /list"
+                )
+                return
+
+            display_index = int(context.args[0])
+            schedule = self.schedule_service.get_schedule_by_index(chat_id, display_index)
+            
+            if schedule and self.schedule_service.delete_schedule(chat_id, display_index):
+                dt = schedule.datetime.astimezone(Config.TIMEZONE)
+                time_str = dt.strftime('%Y-%m-%d %H:%M')
+                if schedule.end_time:
+                    end_time = schedule.end_time.astimezone(Config.TIMEZONE)
+                    time_str += f" ~ {end_time.strftime('%H:%M')}"
+                
+                await update.message.reply_text(
+                    f"✅ 다음 일정이 삭제되었습니다:\n"
+                    f"{time_str} {schedule.title}"
+                )
+                
+                # 주간 일정 업데이트 및 고정
+                now = datetime.now(Config.TIMEZONE)
+                start_date = DateService.get_week_range(now)[0]
+                current_week_schedules = self.schedule_service.get_week_schedules(chat_id, now)
+                
+                message = self.message_service.format_weekly_schedule(current_week_schedules, start_date)
+                sent_message = await update.message.reply_text(message)
+                
+                try:
+                    await context.bot.pin_chat_message(
+                        chat_id=update.effective_chat.id,
+                        message_id=sent_message.message_id,
+                        disable_notification=True
+                    )
+                except Exception as pin_error:
+                    logging.warning(f"메시지 고정 실패: {pin_error}")
+            else:
+                await update.message.reply_text("❌ 해당 번호의 일정을 찾을 수 없습니다.")
+
+        except ValueError:
+            await update.message.reply_text("올바른 숫자를 입력해주세요.")
+        except Exception as e:
+            logging.error(f"일정 삭제 중 오류 발생: {e}")
+            await update.message.reply_text("일정 삭제 중 오류가 발생했습니다.")
+
+    async def edit_schedule(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """일정 수정"""
+        chat_id = str(update.effective_chat.id)
+        
+        try:
+            if len(context.args) < 4:
+                await update.message.reply_text(
+                    "올바른 형식으로 입력해주세요.\n"
+                    "예시 1: /edit 1 2025-02-14 15:00 팀 미팅\n"
+                    "예시 2: /edit 1 2025-02-14 15:00~15:30 팀 미팅\n"
+                    "일정 목록 보기: /list"
+                )
+                return
+
+            display_index = int(context.args[0])
+            date_str = context.args[1]
+            time_str = context.args[2]
+            title = ' '.join(context.args[3:])
+
+            # 시간 범위 파싱
+            start_dt, end_dt = DateService.parse_datetime_range(date_str, time_str)
+            
+            # 새 일정 생성
+            new_schedule = Schedule(
+                title=title,
+                datetime=start_dt,
+                end_time=end_dt
+            )
+            
+            if self.schedule_service.edit_schedule(chat_id, display_index, new_schedule):
+                await update.message.reply_text("✅ 일정이 수정되었습니다!")
+                
+                # 주간 일정 업데이트 및 고정
+                now = datetime.now(Config.TIMEZONE)
+                start_date = DateService.get_week_range(now)[0]
+                current_week_schedules = self.schedule_service.get_week_schedules(chat_id, now)
+                
+                message = self.message_service.format_weekly_schedule(current_week_schedules, start_date)
+                sent_message = await update.message.reply_text(message)
+                
+                try:
+                    await context.bot.pin_chat_message(
+                        chat_id=update.effective_chat.id,
+                        message_id=sent_message.message_id,
+                        disable_notification=True
+                    )
+                except Exception as pin_error:
+                    logging.warning(f"메시지 고정 실패: {pin_error}")
+            else:
+                await update.message.reply_text("❌ 해당 번호의 일정을 찾을 수 없습니다.")
+
+        except ValueError as e:
+            await update.message.reply_text(
+                f"에러: {str(e)}\n"
+                "올바른 형식으로 입력해주세요.\n"
+                "날짜: YYYY-MM-DD\n"
+                "시간: HH:MM 또는 HH:MM~HH:MM"
+            )
+        except Exception as e:
+            logging.error(f"일정 수정 중 오류 발생: {e}")
+            await update.message.reply_text("일정 수정 중 오류가 발생했습니다.")
