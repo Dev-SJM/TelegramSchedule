@@ -30,6 +30,7 @@ def main():
     application.add_handler(CommandHandler('list', command_handlers.list_schedules))
     application.add_handler(CommandHandler('delete', command_handlers.delete_schedule))
     application.add_handler(CommandHandler('edit', command_handlers.edit_schedule))
+    application.add_handler(CommandHandler('cleanup', command_handlers.cleanup_schedules))
 
     # 봇 실행
     application.run_polling()

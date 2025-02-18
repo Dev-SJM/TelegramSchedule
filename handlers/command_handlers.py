@@ -26,6 +26,7 @@ class CommandHandlers:
             "/edit [번호] [날짜] [시간] [일정] - 일정 수정\n"
             "/week - 이번 주 일정 보기\n"
             "/next - 다음 주 일정 보기\n"
+            "/cleanup - 지난 일정 정리\n"
             "/clear - 모든 일정 초기화\n\n"
             "💡 일정을 추가하면 자동으로 주간 일정이 업데이트되고 고정됩니다!"
         )
@@ -257,3 +258,24 @@ class CommandHandlers:
         except Exception as e:
             logging.error(f"일정 수정 중 오류 발생: {e}")
             await update.message.reply_text("일정 수정 중 오류가 발생했습니다.")
+
+    async def cleanup_schedules(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """수동으로 지난 일정 정리"""
+        chat_id = str(update.effective_chat.id)
+        
+        # 정리 전 일정 수 확인
+        total_before = sum(len(schedules) for schedules in self.schedule_service.schedules.values())
+        
+        # 지난 일정 정리
+        self.schedule_service.cleanup_old_schedules()
+        
+        # 정리 후 일정 수 확인
+        total_after = sum(len(schedules) for schedules in self.schedule_service.schedules.values())
+        
+        # 정리된 일정 수 계산
+        cleaned_count = total_before - total_after
+        
+        if cleaned_count > 0:
+            await update.message.reply_text(f"✨ {cleaned_count}개의 지난 일정이 정리되었습니다.")
+        else:
+            await update.message.reply_text("정리할 지난 일정이 없습니다.")

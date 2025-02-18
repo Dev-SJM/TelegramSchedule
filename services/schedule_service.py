@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 from typing import List, Optional
 from config import Config
 from models.schedule import Schedule
@@ -9,12 +10,37 @@ class ScheduleService:
     def __init__(self, storage_service: StorageService):
         self.storage_service = storage_service
         self.schedules = self.storage_service.load_schedules()
+        self.cleanup_old_schedules()  # 초기화할 때 지난 일정 정리
+
+    def cleanup_old_schedules(self) -> None:
+        """지난 일정 정리"""
+        now = datetime.now(Config.TIMEZONE)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        any_changes = False
+        for chat_id in self.schedules:
+            # 현재 시간 이후의 일정만 필터링
+            current_schedules = [
+                schedule for schedule in self.schedules[chat_id]
+                if schedule.datetime.astimezone(Config.TIMEZONE) >= today_start
+            ]
+            
+            # 일정이 필터링되었다면 변경사항 있음
+            if len(current_schedules) != len(self.schedules[chat_id]):
+                self.schedules[chat_id] = current_schedules
+                any_changes = True
+        
+        # 변경사항이 있는 경우에만 저장
+        if any_changes:
+            self.storage_service.save_schedules(self.schedules)
+            logging.info("지난 일정이 정리되었습니다.")
 
     def add_schedule(self, chat_id: str, schedule: Schedule) -> None:
         """일정 추가 및 저장"""
         if chat_id not in self.schedules:
             self.schedules[chat_id] = []
         self.schedules[chat_id].append(schedule)
+        self.cleanup_old_schedules()  # 새 일정 추가할 때마다 정리
         self.storage_service.save_schedules(self.schedules)
 
     def get_schedules(self, chat_id: str) -> List[Schedule]:
