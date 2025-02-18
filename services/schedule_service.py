@@ -1,6 +1,6 @@
 from datetime import datetime
 import logging
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 from config import Config
 from models.schedule import Schedule
 from services.date_service import DateService
@@ -99,19 +99,46 @@ class ScheduleService:
         return False
 
     def list_schedules(self, chat_id: str) -> str:
-        """일정 목록 표시 (1부터 시작하는 인덱스)"""
+        """일정 목록 표시 (인덱스 포함)"""
         schedules = self.get_schedules(chat_id)
         if not schedules:
             return "등록된 일정이 없습니다."
 
-        message = "📋 전체 일정 목록:\n\n"
-        for i, schedule in enumerate(schedules, 1):  # 1부터 시작하는 인덱스
-            dt = schedule.datetime.astimezone(Config.TIMEZONE)
-            time_str = dt.strftime('%Y-%m-%d %H:%M')
-            if schedule.end_time:
-                end_time = schedule.end_time.astimezone(Config.TIMEZONE)
-                time_str += f" ~ {end_time.strftime('%H:%M')}"
-            message += f"{i}. {time_str} {schedule.title}\n"
+        # 날짜별로 그룹화하고 정렬
+        daily_schedules: Dict[str, List[Tuple[int, Schedule]]] = {}
+        now = datetime.now(Config.TIMEZONE)
         
-        message += "\n💡 일정 삭제: /delete [번호]\n💡 일정 수정: /edit [번호] [날짜] [시간] [제목]"
+        # 인덱스와 함께 날짜별로 그룹화
+        for i, schedule in enumerate(schedules):
+            schedule_date = schedule.datetime.astimezone(Config.TIMEZONE)
+            date_str = schedule_date.strftime('%Y-%m-%d (%a)')
+            
+            # 한글 요일로 변환
+            for eng, kor in Config.WEEKDAY_MAP.items():
+                date_str = date_str.replace(f'({eng})', f'({kor})')
+            
+            # 오늘 날짜인 경우 표시
+            if schedule_date.date() == now.date():
+                date_str += " ✨ Today"
+            
+            if date_str not in daily_schedules:
+                daily_schedules[date_str] = []
+            daily_schedules[date_str].append((i+1, schedule))  # 1-based index
+
+        message = "📋 전체 일정 목록:\n\n"
+        
+        # 날짜별로 정렬하여 출력
+        for date_str, day_schedules in sorted(daily_schedules.items(), 
+                                            key=lambda x: datetime.strptime(x[0].split(' ')[0], '%Y-%m-%d')):
+            message += f"📌 {date_str}\n"
+            # 같은 날짜 내에서 시간순 정렬
+            for idx, schedule in sorted(day_schedules, key=lambda x: x[1].datetime):
+                time_str = schedule.datetime.strftime('%H:%M')
+                if schedule.end_time:
+                    end_time = schedule.end_time.astimezone(Config.TIMEZONE)
+                    time_str += f" ~ {end_time.strftime('%H:%M')}"
+                message += f"    {idx}. ⌚️ {time_str} {schedule.title}\n"
+            message += "\n"
+        
+        message += "💡 일정 삭제: /delete [번호]\n💡 일정 수정: /edit [번호] [날짜] [시간] [제목]"
         return message
