@@ -12,7 +12,7 @@ class MessageService:
 
         daily_schedules: Dict[str, List[Schedule]] = {}
         week_start = start_date.astimezone(Config.TIMEZONE)
-        week_end = (week_start + timedelta(days=6)).astimezone(Config.TIMEZONE)
+        week_end = (week_start + timedelta(days=7)).astimezone(Config.TIMEZONE)
         now = datetime.now(Config.TIMEZONE)
         
         # 현재 시간 이후의 일정만 필터링
